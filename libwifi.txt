@@ -1,0 +1,181 @@
+pub struct Beacon {
+    pub header: ManagementHeader,
+    pub timestamp: u64,
+    pub beacon_interval: u16,
+    pub capability_info: u16,
+    pub station_info: StationInfo,
+}
+
+pub struct ManagementHeader {
+    pub frame_control: FrameControl,
+    pub duration: [u8; 2],
+    pub address_1: MacAddress,
+    pub address_2: MacAddress,
+    pub address_3: MacAddress,
+    pub sequence_control: SequenceControl,
+}
+
+
+pub struct FrameControl {
+    pub protocol_version: FrameProtocolVersion,
+    pub frame_type: FrameType,
+    pub frame_subtype: FrameSubType,
+    pub flags: u8,
+}
+
+pub enum FrameProtocolVersion {
+    PV0,
+    Unknown(u8),
+}
+
+pub enum FrameType {
+    Management,
+    Control,
+    Data,
+    Extension,
+    Unknown(u8),
+}
+
+pub enum FrameSubType {
+    AssociationRequest,
+    AssociationResponse,
+    ReassociationRequest,
+    ReassociationResponse,
+    ProbeRequest,
+    ProbeResponse,
+    TimingAdvertisement,
+    Beacon,
+    Atim,
+    Disassociation,
+    Authentication,
+    Deauthentication,
+    Action,
+    ActionNoAck,
+    Trigger,
+    Tack,
+    BeamformingReportPoll,
+    NdpAnnouncement,
+    ControlFrameExtension,
+    ControlWrapper,
+    BlockAckRequest,
+    BlockAck,
+    PsPoll,
+    Rts,
+    Cts,
+    Ack,
+    CfEnd,
+    CfEndCfAck,
+    Data,
+    DataCfAck,
+    DataCfPoll,
+    DataCfAckCfPoll,
+    NullData,
+    CfAck,
+    CfPoll,
+    CfAckCfPoll,
+    QosData,
+    QosDataCfAck,
+    QosDataCfPoll,
+    QosDataCfAckCfPoll,
+    QosNull,
+    QosCfPoll,
+    QosCfAckCfPoll,
+    DMGBeacon,
+    S1GBeacon,
+    Unhandled(u8),
+    Reserved(u8),
+}
+
+pub struct MacAddress(pub [u8; 6]);
+
+Address 1:
+The recipient station address. If to_ds is set, this is the AP address. If from_ds is set then this is the station address
+
+Address 2:
+The transmitter station address. If from_ds is set, this is the AP address. If to_ds is set then this is the station address.
+
+Address 3:
+If Address 1 contains the destination address then Address 3 will contain the source address. Similarly, if Address 2 contains the source address then Address 3 will contain the destination address.
+
+Sequence Control:
+Contains the FragmentNumber and SequenceNumber that define the main frame and the number of fragments in the frame.
+
+pub struct SequenceControl {
+    pub fragment_number: u8,
+    pub sequence_number: u16,
+}
+
+pub struct StationInfo {
+
+    pub supported_rates: Vec<SupportedRate>,
+    pub extended_supported_rates: Option<Vec<SupportedRate>>,
+    pub ssid: Option<String>,
+    pub ssid_length: Option<usize>,
+    pub ds_parameter_set: Option<u8>,
+    pub ibss_parameter_set: Option<u16>,
+    pub tim: Option<Vec<u8>>,
+    pub country_info: Option<Vec<u8>>,
+    pub power_constraint: Option<u8>,
+    pub ht_capabilities: Option<Vec<u8>>,
+    pub ht_information: Option<HTInformation>,
+    pub multiple_bssid: Option<MultipleBSSID>,
+    pub vht_capabilities: Option<Vec<u8>>,
+    pub rsn_information: Option<RsnInformation>,
+    pub wpa_info: Option<WpaInformation>,
+    pub wps_info: Option<WpsInformation>,
+    pub vendor_specific: Vec<VendorSpecificInfo>,
+    pub extended_capabilities: Option<ExtendedCapabilities>,
+    pub channel_switch: Option<ChannelSwitchAnnouncment>,
+    pub data: Vec<(u8, Vec<u8>)>,
+}
+
+pub struct SupportedRate {
+    pub mandatory: bool,
+    pub rate: f32,
+}
+
+pub struct HTInformation {
+    pub primary_channel: u8,
+    pub other_data: Vec<u8>,
+}
+
+pub struct MultipleBSSID {
+    pub max_bssid_indicator: u8,
+    pub other_data: Vec<u8>,
+}
+
+pub struct RsnInformation {
+
+    pub version: u16,
+    pub group_cipher_suite: RsnCipherSuite,
+    pub pairwise_cipher_suites: Vec<RsnCipherSuite>,
+    pub akm_suites: Vec<RsnAkmSuite>,
+    pub pre_auth: bool,
+    pub no_pairwise: bool,
+    pub ptksa_replay_counter: u8,
+    pub gtksa_replay_counter: u8,
+    pub mfp_required: bool,
+    pub mfp_capable: bool,
+    pub joint_multi_band_rsna: bool,
+    pub peerkey_enabled: bool,
+    pub extended_key_id: bool,
+    pub ocvc: bool,
+}
+
+pub struct WpsInformation {
+    pub setup_state: WpsSetupState,
+    pub manufacturer: String,
+    pub model: String,
+    pub model_number: String,
+    pub serial_number: String,
+    pub primary_device_type: String,
+    pub device_name: String,
+}
+
+pub struct VendorSpecificInfo {
+    pub element_id: u8,
+    pub length: u8,
+    pub oui: [u8; 3],
+    pub oui_type: u8,
+    pub data: Vec<u8>,
+}

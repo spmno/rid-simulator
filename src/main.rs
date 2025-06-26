@@ -1,33 +1,20 @@
 
-use tracing::{info, error};
+use tracing::info;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use tracing_appender::{non_blocking, rolling::{self}};
-use pnet::datalink::{self, interfaces, Channel, NetworkInterface};
+use actix_web::{web, App, HttpServer};
+use std::sync::Mutex;
 
-fn get_wifi_devices() -> Vec<NetworkInterface> {
- let interfaces = interfaces();
-    let mut wifi_devices = Vec::new();
 
-    info!("Available WiFi network devices:");
-    for interface in interfaces {
-        // 根据操作系统调整过滤条件
-        if interface.name.contains("wlx") || interface.name.contains("wlan1") {
-            info!("Name: {}, MAC: {:?}", interface.name, interface.mac);
-            wifi_devices.push(interface);
-        }
-    }
-    wifi_devices
-}
+pub mod message;
+pub mod rid_simulator;
+pub mod web_service;
 
-fn start_simulator() {
-    let wifi_devices = get_wifi_devices();
-    if wifi_devices.is_empty() {
-        error!("No WiFi devices found");
-        return;
-    }
-}
+use rid_simulator::RidSimulator;
+use web_service::AppState;
 
-fn main() {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     let file_appender = rolling::daily("logs", "capture.log");
     let (non_blocking_appender, _guard) = non_blocking(file_appender);
     let file_layer = fmt::layer()
@@ -38,5 +25,16 @@ fn main() {
 
     tracing_subscriber::registry().with(console_subscriber).with(file_layer).init();
     info!("rid simulator start");
-    start_simulator();
+    let appstate:web::Data<AppState> = web::Data::new(AppState {
+        simulator: Mutex::new(RidSimulator::new())
+    });
+    appstate.simulator.lock().unwrap().start_simulator();
+    HttpServer::new(move || {
+        App::new()
+            .app_data(appstate.clone())
+            .service(web_service::simulator)
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }

@@ -1,0 +1,41 @@
+{
+  "protocol_version": 1,
+  "message_counter": 42,
+  "message_size": 89, 
+  "message_quantity": 3, 
+  
+  "base_message": {
+    "id_type": 1,
+    "ua_id": "RID-123456",   
+    "ua_type": 1       
+  },
+  
+  "system_message": {
+    "coordinate_system": 0,
+    "classification_region": 2,
+    "latitude": 417144677,
+    "longitude": 1234844601
+  },
+  
+  "position_message": {
+    "run_status": 1,
+    "height_type": 1,
+    "track_direction": 1,
+    "speed_multiplier": 0,
+    "track_angle": 181,
+    "ground_speed": 0,
+    "vertical_speed": 0,
+    "latitude": 30.123456,   
+    "longitude": 120.654321, 
+    "pressure_altitude": 2271,
+    "geometric_altitude": 2116,
+    "ground_altitude": 2000,
+    "vertical_accuracy": 12,
+    "horizontal_accuracy": 2, 
+    "speed_accuracy": 4,
+    "timestamp": 32777
+  },
+  
+  "checksum": 0,       
+  "reserved": [0,0,0] 
+}
