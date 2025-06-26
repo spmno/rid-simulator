@@ -1,6 +1,6 @@
 
 use tracing::info;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::EnvFilter};
 use tracing_appender::{non_blocking, rolling::{self}};
 use actix_web::{web, App, HttpServer};
 use std::sync::Mutex;
@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
 
     let console_subscriber = fmt::layer().with_writer(std::io::stdout);
 
-    tracing_subscriber::registry().with(console_subscriber).with(file_layer).init();
+    tracing_subscriber::registry().with(console_subscriber).with(file_layer).with(EnvFilter::new("INFO")).init();
     info!("rid simulator start");
     let appstate:web::Data<AppState> = web::Data::new(AppState {
         simulator: Mutex::new(RidSimulator::new())
