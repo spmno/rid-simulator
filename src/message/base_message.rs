@@ -85,13 +85,12 @@ impl Message for BaseMessage {
         bytes.push(type_byte);
         
         // 编码UAS ID（最多20字节，不足补空格）
-        let mut uas_bytes = self.uas_id.as_bytes().to_vec();
-        uas_bytes.resize(20, b' ');
-        bytes.extend_from_slice(&uas_bytes[..20]);
+        let uas_bytes = self.uas_id.as_bytes().to_vec();
+        bytes.extend_from_slice(&uas_bytes);
         
-        // 3字节预留空间
-        let reserved:[u8;3] = [0,0,0];
-        bytes.extend_from_slice(&reserved);
+        let id_len = uas_bytes.len();
+        let reserved = vec![0u8; 23-id_len];
+        bytes.extend(&reserved);
         
         bytes
     }

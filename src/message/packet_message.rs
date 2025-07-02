@@ -1,6 +1,9 @@
 use crate::message::{base_message::BaseMessage, position_vector_message::PositionVectorMessage, system_message::SystemMessage};
 use super::message::{Message, MessageError};
 use serde::{Serialize, Deserialize};
+use std::sync::atomic::{AtomicU8, Ordering};
+
+static RID_COUNTER: AtomicU8 = AtomicU8::new(1);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketMessage {
@@ -34,6 +37,9 @@ impl PacketMessage {
             checksum: 0,
             reserved: [0; 3],
         }
+    }
+    pub fn get_ssid(&self) -> String {
+        return format!("RID-{}", self.base_message.uas_id.clone());
     }
 }
 
@@ -72,10 +78,13 @@ impl Message for PacketMessage {
     }
 
     fn encode(&self) -> Vec<u8> {
+        self.print();
         let mut bytes = Vec::new();
         
         // 编码头部
-        bytes.push(self.message_counter);
+        let rid_counter: u8 = RID_COUNTER.fetch_add(0x01, Ordering::SeqCst); // 序列号按802.11规范递增
+
+        bytes.push(rid_counter);
         bytes.push(self.protocol_version);
         
         bytes.push(self.message_size);
@@ -83,8 +92,9 @@ impl Message for PacketMessage {
         
         // 编码子消息
         bytes.extend(self.base_message.encode());
-        bytes.extend(self.system_message.encode());
         bytes.extend(self.position_message.encode());
+        bytes.extend(self.system_message.encode());
+
         
         // 计算校验和
         let checksum = crc16::State::<crc16::XMODEM>::calculate(&bytes);
@@ -95,6 +105,8 @@ impl Message for PacketMessage {
         
         bytes
     }
+
+
 
     fn print(&self) {
         println!("=== Packet Message ===");

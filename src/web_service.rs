@@ -12,6 +12,6 @@ pub struct AppState {
 async fn simulator(appdata:web::Data<AppState>, message: web::Json<PacketMessage>) -> impl Responder {
     info!("receive simulator request: {:?}.", message);
     let simulator = appdata.simulator.lock().unwrap();
-    simulator.send_beacon(message.encode().as_slice());
+    simulator.build_and_send_rid(&message.get_ssid(), message.encode());
     HttpResponse::Ok().body("success.")
 }

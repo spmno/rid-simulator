@@ -2,6 +2,7 @@ use std::convert::TryInto;
 use tracing::info;
 use serde::{Serialize, Deserialize};
 use super::message::{Message, MessageError, MessageType};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // SystemMessage 结构体
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,10 +21,10 @@ pub struct SystemMessage {
     pub longitude: i32,             // 控制站经度 (小端序)
 
     // 可选字段
-    pub operation_count: Option<u16>, // 运行区域计数 (小端序)
-    pub operation_radius: Option<u8>, // 运行区域半径 (*10)
-    pub altitude_upper: Option<u16>,  // 运行区域高度上限 (几何高度, 小端序)
-    pub altitude_lower: Option<u16>,  // 运行区域高度下限 (几何高度, 小端序)
+    pub operation_count: u16, // 运行区域计数 (小端序)
+    pub operation_radius: u8, // 运行区域半径 (*10)
+    pub altitude_upper: u16,  // 运行区域高度上限 (几何高度, 小端序)
+    pub altitude_lower: u16,  // 运行区域高度下限 (几何高度, 小端序)
 
     // 起始字节17 (1字节)
     #[serde(default)]
@@ -37,9 +38,10 @@ pub struct SystemMessage {
     #[serde(default)]
     pub station_altitude: u16,     // 控制站高度 (小端序)
 
-    // 可选字段
-    pub timestamp: Option<u32>,     // 时间戳 (Unix时间, 秒)
-    pub reserved: Option<u8>,       // 预留
+    // 时间戳
+    pub timestamp: u32,     // 时间戳 (Unix时间, 秒)
+    #[serde(default)]
+    pub reserved: u8,       // 预留
 }
 
 impl SystemMessage {
@@ -84,37 +86,21 @@ impl Message for SystemMessage {
 
         // 处理可选字段（起始字节10）
         let mut offset = 9;
-        let operation_count = if data.len() > offset + 1 {
-            let value = u16::from_le_bytes([data[offset], data[offset+1]]);
-            offset += 2;
-            Some(value)
-        } else {
-            None
-        };
+        let value = u16::from_le_bytes([data[offset], data[offset+1]]);
+        let operation_count = value;
+        offset += 2;
 
-        let operation_radius = if data.len() > offset {
-            let value = data[offset];
-            offset += 1;
-            Some(value)
-        } else {
-            None
-        };
+        let value = data[offset];
+        let operation_radius = value;
+        offset += 1;
 
-        let altitude_upper = if data.len() > offset + 1 {
-            let value = u16::from_le_bytes([data[offset], data[offset+1]]);
-            offset += 2;
-            Some(value)
-        } else {
-            None
-        };
+        let value = u16::from_le_bytes([data[offset], data[offset+1]]);
+        let altitude_upper = value;
+        offset += 2;
 
-        let altitude_lower = if data.len() > offset + 1 {
-            let value = u16::from_le_bytes([data[offset], data[offset+1]]);
-            offset += 2;
-            Some(value)
-        } else {
-            None
-        };
+        let value = u16::from_le_bytes([data[offset], data[offset+1]]);
+        let altitude_lower = value;
+        offset += 2;
 
         // 解析必送字段
         let ua_category = data[offset];
@@ -124,29 +110,17 @@ impl Message for SystemMessage {
         offset += 1;
         
         // 解析控制站高度
-        let station_altitude = if data.len() > offset + 1 {
-            u16::from_le_bytes([data[offset], data[offset+1]])
-        } else {
-            return Err(MessageError::InsufficientLength(offset + 2, data.len()));
-        };
+        let station_altitude = u16::from_le_bytes([data[offset], data[offset+1]]);
         offset += 2;
+   
 
         // 处理可选尾部字段
-        let timestamp = if data.len() > offset + 3 {
-            let value = u32::from_le_bytes([
-                data[offset], data[offset+1], data[offset+2], data[offset+3]
-            ]);
-            offset += 4;
-            Some(value)
-        } else {
-            None
-        };
+        let timestamp = u32::from_le_bytes([
+            data[offset], data[offset+1], data[offset+2], data[offset+3]
+        ]);
+        offset += 4;
 
-        let reserved = if data.len() > offset {
-            Some(data[offset])
-        } else {
-            None
-        };
+        let reserved = data[offset];
 
         Ok(Self {
             coordinate_system,
@@ -185,33 +159,24 @@ impl Message for SystemMessage {
         bytes.extend_from_slice(&self.latitude.to_le_bytes());
         bytes.extend_from_slice(&self.longitude.to_le_bytes());
         
-        // 可选字段编码
-        if let (Some(count), Some(radius), Some(upper), Some(lower)) = (
-            self.operation_count,
-            self.operation_radius,
-            self.altitude_upper,
-            self.altitude_lower,
-        ) {
-            bytes.extend_from_slice(&count.to_le_bytes());
-            bytes.push(radius);
-            bytes.extend_from_slice(&upper.to_le_bytes());
-            bytes.extend_from_slice(&lower.to_le_bytes());
-        }
+        // count and radius
+        bytes.extend_from_slice(&self.operation_count.to_le_bytes());
+        bytes.push(self.operation_radius);
+        bytes.extend_from_slice(&self.altitude_upper.to_le_bytes());
+        bytes.extend_from_slice(&self.altitude_lower.to_le_bytes());
         
         // UA类别和等级
-        bytes.push(self.ua_category);
-        bytes.push(self.ua_level);
+        let ua_category_level = self.ua_category << 4 | self.ua_level;
+        bytes.push(ua_category_level);
         
         // 控制站高度
         bytes.extend_from_slice(&self.station_altitude.to_le_bytes());
         
         // 时间戳和预留
-        if let Some(ts) = self.timestamp {
-            bytes.extend_from_slice(&ts.to_le_bytes());
-        }
-        if let Some(resv) = self.reserved {
-            bytes.push(resv);
-        }
+         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
+        bytes.extend_from_slice(&timestamp.to_le_bytes());
+
+        bytes.push(self.reserved);
         
         bytes
     }
@@ -229,29 +194,20 @@ impl Message for SystemMessage {
         println!("控制站纬度: {:.6}°", self.latitude as f64 * 1e-7);
         println!("控制站经度: {:.6}°", self.longitude as f64 * 1e-7);
         
-        if let Some(count) = self.operation_count {
-            println!("运行区域计数: {}", count);
-        }
-        if let Some(radius) = self.operation_radius {
-            println!("运行区域半径: {} (实际: {} 米)", radius, radius as f32 * 10.0);
-        }
-        if let Some(alt_upper) = self.altitude_upper {
-            println!("运行区域高度上限: {} (实际: {:.1} 米)", alt_upper, alt_upper as f32 * 0.1);
-        }
-        if let Some(alt_lower) = self.altitude_lower {
-            println!("运行区域高度下限: {} (实际: {:.1} 米)", alt_lower, alt_lower as f32 * 0.1);
-        }
+        println!("运行区域计数: {}", self.operation_count);
+        println!("运行区域半径: {} (实际: {} 米)", self.operation_radius, self.operation_radius as f32 * 10.0);
+        
+        println!("运行区域高度上限: {} (实际: {:.1} 米)", self.altitude_upper, self.altitude_upper as f32 * 0.1);
+        println!("运行区域高度下限: {} (实际: {:.1} 米)", self.altitude_lower, self.altitude_lower as f32 * 0.1);
         
         println!("UA运行类别: {}", self.ua_category);
         println!("UA等级: {}", self.ua_level);
         println!("控制站高度: {} (实际: {:.1} 米)", self.station_altitude, self.station_altitude as f32 * 0.1);
         
-        if let Some(ts) = self.timestamp {
-            // 实际应用中可将时间戳转换为可读时间
-            println!("时间戳: {}", ts);
-        }
-        if let Some(res) = self.reserved {
-            println!("预留字段: {:02X}", res);
-        }
+        // 实际应用中可将时间戳转换为可读时间
+        println!("时间戳: {}", self.timestamp);
+
+        println!("预留字段: {:02X}", self.reserved);
+        
     }
 }
