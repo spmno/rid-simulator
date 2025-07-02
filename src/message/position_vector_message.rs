@@ -3,6 +3,7 @@ use crate::message::message::MessageType;
 use super::message::{Message, MessageError};
 use serde::{Serialize, Deserialize};
 
+/// 位置向量报文，强 制 动 态 报 文 ，主要包含位置 ， 高度 ， 速度 ， 时间等标识 UA 运行情况的报文 。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PositionVectorMessage {
     // 第1字节 (运行状态和标志位)

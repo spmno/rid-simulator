@@ -15,6 +15,8 @@ use web_service::AppState;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    
+    //初始化log，每天更新一个文件
     let file_appender = rolling::daily("logs", "capture.log");
     let (non_blocking_appender, _guard) = non_blocking(file_appender);
     let file_layer = fmt::layer()
@@ -22,19 +24,22 @@ async fn main() -> std::io::Result<()> {
         .with_writer(non_blocking_appender);
 
     let console_subscriber = fmt::layer().with_writer(std::io::stdout);
-
+    //只打印info以上
     tracing_subscriber::registry().with(console_subscriber).with(file_layer).with(EnvFilter::new("INFO")).init();
     info!("rid simulator start");
+    //初始化simulator，单例
     let appstate:web::Data<AppState> = web::Data::new(AppState {
         simulator: Mutex::new(RidSimulator::new())
     });
     appstate.simulator.lock().unwrap().start_simulator();
+    //启动服务器
     HttpServer::new(move || {
         App::new()
             .app_data(appstate.clone())
             .service(web_service::simulator)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
+
 }

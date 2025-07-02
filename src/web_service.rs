@@ -12,6 +12,8 @@ pub struct AppState {
 async fn simulator(appdata:web::Data<AppState>, message: web::Json<PacketMessage>) -> impl Responder {
     info!("receive simulator request: {:?}.", message);
     let simulator = appdata.simulator.lock().unwrap();
-    simulator.build_and_send_rid(&message.get_ssid(), message.encode());
-    HttpResponse::Ok().body("success.")
+    match simulator.build_and_send_rid(&message.get_ssid(), message.encode()) {
+        Ok(_) => HttpResponse::Ok().body("success."),
+        Err(e) => HttpResponse::InternalServerError().body(format!("发送失败: {}", e))
+    }
 }

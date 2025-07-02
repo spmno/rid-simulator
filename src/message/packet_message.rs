@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 static RID_COUNTER: AtomicU8 = AtomicU8::new(1);
 
+/// 以整包形式发送，其中包含了BaseMessage， SystemMessage, PositionVectorMessage，主要模仿收到大疆的结构类型
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketMessage {
     protocol_version: u8,          // 协议版本（1字节）
@@ -19,7 +20,9 @@ pub struct PacketMessage {
 }
 
 impl PacketMessage {
+    // 每一帧的大小
     const MESSAGE_SIZE:u8 = 25;
+    // 每包一共3帧
     const MESSAGE_QUANTITY:u8 = 3;
     pub fn new(
         base: BaseMessage,
@@ -38,6 +41,7 @@ impl PacketMessage {
             reserved: [0; 3],
         }
     }
+    // 获取rid加前缀为ssid，仿大疆
     pub fn get_ssid(&self) -> String {
         return format!("RID-{}", self.base_message.uas_id.clone());
     }

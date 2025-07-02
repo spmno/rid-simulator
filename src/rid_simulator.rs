@@ -1,7 +1,7 @@
 use pnet::datalink::{interfaces, Channel, NetworkInterface};
 use libwifi::{FrameProtocolVersion, FrameType, FrameSubType};
 use libwifi::frame::Beacon;
-use libwifi::frame::components::{ManagementHeader, FrameControl, MacAddress, SequenceControl, StationInfo, SupportedRate, VendorSpecificInfo};
+use libwifi::frame::components::{ManagementHeader, FrameControl, MacAddress, SequenceControl, StationInfo, VendorSpecificInfo};
 use tracing::{info, error};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,6 +12,7 @@ pub struct RidSimulator {
 
 static SEQ_COUNTER: AtomicU16 = AtomicU16::new(0);
 
+/// RadioTap头，主要是写一些WIFI管理帧的信息
 #[derive(Debug, Default)]
 struct RadioTapHeader {
     it_version: u8,     // 固定为 0
@@ -41,13 +42,13 @@ impl RidSimulator {
         }
     }
 
-    pub fn get_wifi_devices(&mut self) {
+    fn get_wifi_devices(&mut self) {
         let interfaces = interfaces();
 
         info!("Available WiFi network devices:");
         for interface in interfaces {
-            // 根据操作系统调整过滤条件
-            if interface.name.contains("wlx") || interface.name.contains("wlan1") {
+            // 根据操作系统调整过滤条件, 分别为台式机, raspberry pi， 笔记本的wifi名称
+            if interface.name.contains("wlx") || interface.name.contains("wlan1") || interface.name.contains("wlp4") {
                 info!("Name: {}, MAC: {:?}", interface.name, interface.mac);
                 self.wifi_devices.push(interface);
             } else {
@@ -64,14 +65,13 @@ impl RidSimulator {
         info!("device counter: {}", self.wifi_devices.len());
     }
 
-    pub fn build_and_send_rid(&self, ssid: &str, data: Vec<u8>) -> String {
-        //let beacon_frame = self.build_beacon_with_rid(data);
+    pub fn build_and_send_rid(&self, ssid: &str, data: Vec<u8>) -> Result<String, String> {
         let radiotap_bytes = self.build_radiotap_header();
         let beacon_frame = self.build_rid_beacon(ssid, data.as_slice());
         let full_frame = [radiotap_bytes, beacon_frame].concat();
-        self.send_beacon(&full_frame);
+        self.send_beacon(&full_frame)?;  // 添加错误传播
         info!("beacon frame: {:?}", full_frame);
-        return "OK".to_string();
+        Ok("OK".to_string())  // 修改返回Result
     }
 
     fn build_radiotap_header(&self) -> Vec<u8> {
@@ -123,7 +123,7 @@ impl RidSimulator {
         bytes
     }
 
-    // 构造含RID的Beacon帧（修正版）
+    // 构造含RID的Beacon帧
     pub fn build_rid_beacon(&self, ssid: &str, rid_data: &[u8]) -> Vec<u8> {
         let seq = SEQ_COUNTER.fetch_add(0x10, Ordering::SeqCst); // 序列号按802.11规范递增
         let timestamp = SystemTime::now()
@@ -149,6 +149,7 @@ impl RidSimulator {
         };
 
         let mut station_info = StationInfo {
+            // 没啥用先注了
             //supported_rates: vec![
             //    SupportedRate { mandatory: true, rate: 1.0 }, // 1 Mbps（必选）[4](@ref)
             //    SupportedRate { mandatory: false, rate: 6.0 },
@@ -159,7 +160,7 @@ impl RidSimulator {
             ..Default::default()
         };
 
-        // 关键修正：直接嵌入原始RID数据（不添加OUI头部）[1](@ref)
+        // 直接嵌入原始RID数据（不添加OUI头部）
         station_info.vendor_specific.push(VendorSpecificInfo {
             element_id: 221,             // IEEE自定义元素ID
             length: (rid_data.len()) as u8, // 
@@ -179,82 +180,26 @@ impl RidSimulator {
         beacon.encode()
     }
 
-    pub fn build_beacon_with_rid(&self, data: Vec<u8>) -> Vec<u8> {
-    // 1. 构建 ManagementHeader
-        let header = ManagementHeader {
-            frame_control: FrameControl {
-                protocol_version: FrameProtocolVersion::PV0,
-                frame_type: FrameType::Management,
-                frame_subtype: FrameSubType::Beacon,
-                flags: 0, // 无标志位
-            },
-            duration: [0, 0], // Beacon 帧通常为 0
-            address_1: MacAddress([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]), // 广播地址
-            address_2: MacAddress([0x00, 0xe0, 0x4b, 0xd3, 0xde, 0xd6]), // 发送端 MAC (无人机)
-            address_3: MacAddress([0x00, 0xe0, 0x4b, 0xd3, 0xde, 0xd6]), // BSSID (同发送端)
-            sequence_control: SequenceControl {
-                fragment_number: 0,
-                sequence_number: 0, // 序列号可动态生成
-            },
-        };
-
-
-        // 2. 构建 StationInfo
-        let ssid = "RID-12345678".to_string();
-        let ssid_len = ssid.len();
-        let mut station_info = StationInfo {
-            supported_rates: vec![
-                SupportedRate { mandatory: true, rate: 1.0 }, // 1 Mbps (必选)
-                SupportedRate { mandatory: false, rate: 6.0 }, // 6 Mbps
-            ],
-            extended_supported_rates: None,
-            ssid: Some(ssid), // 空 SSID
-            ssid_length: Some(ssid_len),
-            ds_parameter_set: Some(6), // 信道 6
-            vendor_specific: vec![],
-            ..StationInfo::default() // 其他字段用默认值
-        };
-
-        let rid_data = hex::decode("FA0BBC0D00102038000058D6DF1D9055A308820DC10ACF072803D20F0100").unwrap();
-        // 3. 嵌入 RID 到 Vendor-Specific IE
-        let rid_ie = VendorSpecificInfo {
-            element_id: 221, // Vendor-Specific IE 类型
-            length: data.len() as u8 , // 总长度 = RID长度 + OUI(3) + OUI类型(1)
-            oui: [0;3], // 自定义 OUI (替换为无人机厂商ID)
-            oui_type: 0x0d, // 标识 RID 数据类型
-            data: rid_data,
-        };
-        station_info.vendor_specific.push(rid_ie);
-
-        // 4. 构建完整 Beacon 帧
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros() as u64;
-        let beacon = Beacon {
-            header,
-            timestamp: timestamp, // 可置0或动态生成
-            beacon_interval: 1000, // 102.4ms ≈ 10Hz
-            capability_info: 0x1104, // 开放网络
-            station_info,
-        };
-
-        // 5. 序列化为字节流
-        beacon.encode()
-    }
-
-    pub fn send_beacon(&self, beacon_data: &[u8]) {
+    pub fn send_beacon(&self, beacon_data: &[u8]) -> Result<(), String> {
         match pnet::datalink::channel(&self.wifi_devices[0], Default::default()) {
             Ok(Channel::Ethernet(mut tx, _rx)) => {
-                tx.send_to(beacon_data, None);
-                info!("send rid.");
+                if let Some(_) = tx.send_to(beacon_data, None) {
+                    info!("send rid.");
+                    Ok(())
+                } else {
+                    error!("Failed to send packet");
+                    Err("发送失败".into())
+                }
             },
             Ok(_) => {
                 error!("Unsupported channel type");
-                return;
+                Err("不支持的通道类型".into())
             }
             Err(e) => {
                 error!("Failed to create channel: {}", e);
-                return;
+                Err(format!("通道创建失败: {}", e))
             }
-        };
+        }
     }
 
 }

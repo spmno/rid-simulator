@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use super::message::{Message, MessageError, MessageType};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// SystemMessage 结构体
+// SystemMessage 结构体，系统报文（报文类型 0x4）为周期性，强制静态报文，用于描述无人驾驶航空器控制站位置和高度 、 航空器组群及额外的系统信息
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SystemMessage {
     // 起始字节1 (1字节)
@@ -114,7 +114,7 @@ impl Message for SystemMessage {
         offset += 2;
    
 
-        // 处理可选尾部字段
+        // 时间及尾部字段
         let timestamp = u32::from_le_bytes([
             data[offset], data[offset+1], data[offset+2], data[offset+3]
         ]);

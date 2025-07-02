@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::str;
 use tracing::info;
 use serde::{Serialize, Deserialize};
@@ -7,6 +6,7 @@ use crate::message::message::MessageType;
 
 use super::message::{Message, MessageError};
 
+/// 基本类型，主要包含了RID的字符串
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BaseMessage {
     pub id_type: u8,          // 高位 4 位 (7-4 位)
@@ -84,10 +84,11 @@ impl Message for BaseMessage {
         let type_byte = (self.id_type << 4) | (self.ua_type & 0x0F);
         bytes.push(type_byte);
         
-        // 编码UAS ID（最多20字节，不足补空格）
+        // 编码UAS ID（最多20字节）
         let uas_bytes = self.uas_id.as_bytes().to_vec();
         bytes.extend_from_slice(&uas_bytes);
         
+        //不足的位置写0
         let id_len = uas_bytes.len();
         let reserved = vec![0u8; 23-id_len];
         bytes.extend(&reserved);
